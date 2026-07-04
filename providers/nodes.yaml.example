@@ -1,0 +1,8 @@
+proxies:
+  - name: "🇯🇵 JP-01"
+    type: ss
+    server: example.com
+    port: 443
+    cipher: chacha20-ietf-poly1305
+    password: "your-password"
+    udp: true
