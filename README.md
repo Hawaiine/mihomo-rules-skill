@@ -162,11 +162,11 @@ bash scripts/generate-config.sh
 
 ```mermaid
 graph LR
-    A[checkout@v7] --> B[sync-upstream.sh 20m]
-    B --> C[validate-ruleset.sh 5m]
-    C --> D[generate-config.sh 10m]
-    D --> E[git commit + push]
-    E --> F[Discord 通知]
+    A[checkout] --> B[sync-upstream]
+    B --> C[validate-ruleset]
+    C --> D[generate-config]
+    D --> E[commit + push]
+    E --> F[Discord]
 ```
 
 | 步骤 | 超时 | 说明 |
