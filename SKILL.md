@@ -2,31 +2,33 @@
 name: mihomo-rules-management
 description: >-
   Use when managing mihomo/clash-meta compatible RULE-SET proxy rulesets —
-  syncing upstream domain lists, adding/reseeding brand rulesets, validating
-  YAML format, generating platform configs (Nikki/Clash for Android), and
+  syncing upstream domain lists (v2fly/Loyalsoldier/blackmatrix7),
+  adding/reseeding brand rulesets, validating YAML format, generating platform
+  configs (Nikki/Clash for Android), syncing icons from Oasisic-Icons, and
   operating the associated GitHub Actions CI/CD pipeline. Covers the
   Hawaiine/mihomo-rules project conventions.
-version: 1.2.0
+version: 2.0.0
 author: Hermes Agent
 license: MIT
 metadata:
   hermes:
-    tags: [mihomo, clash, proxy, ruleset, sync]
-    related_skills: [github-actions-workflows, bash-projects, systematic-debugging]
+    tags: [mihomo, clash, proxy, ruleset, sync, nikki, openwrt]
+    related_skills: [github-actions-workflows, bash-projects, systematic-debugging, hermes-agent-skill-authoring]
 ---
 
 # mihomo-rules 管理 Skill
 
 ## Overview
 
-Manage a mihomo-compatible RULE-SET-level proxy ruleset repository. The project syncs upstream domain lists from v2fly/domain-list-community and Loyalsoldier/clash-rules, auto-discovers empty rulesets, validates YAML format, generates platform-specific configs, and notifies via Discord webhook.
+Manage a mihomo-compatible RULE-SET-level proxy ruleset repository (~105 brands, 320k+ rules). The project syncs upstream domain lists from multiple sources, validates YAML format with auto-fix, generates platform-specific configs for OpenWrt Nikki and Clash for Android, injects brand icons from Oasisic-Icons, and notifies via Discord webhook.
 
 ## When to Use
 
-- 用户要求添加/修改/删除 ruleset 规则集
-- 需要同步上游域名数据（v2fly / Loyalsoldier）
+- 用户要求添加/修改/删除 ruleset 品牌规则集
+- 需要同步上游域名数据（v2fly / Loyalsoldier / blackmatrix7）
 - 校验 ruleset 文件格式是否符合规范
 - 生成 Nikki（OpenWrt）或 Clash for Android 配置文件
+- 同步品牌图标（Oasisic-Icons）
 - 调试 GitHub Actions CI/CD 工作流
 - 排查 Discord 通知失败
 
@@ -34,166 +36,214 @@ Manage a mihomo-compatible RULE-SET-level proxy ruleset repository. The project 
 
 ```
 mihomo-rules/
-├── ruleset/                   # 规则集文件（.yaml）
-│   ├── Direct.yaml            # 国内直连域名
-│   ├── Proxy.yaml             # 默认代理域名
-│   ├── Reject.yaml            # 广告/恶意域名
-│   ├── Private.yaml           # 私有地址
-│   ├── LanCIDR.yaml           # 局域网 IP 段（IP-CIDR）
-│   ├── CNCIDR.yaml            # 中国 IP 段（IP-CIDR）
-│   ├── Telegram.yaml          # Telegram 直连域名
-│   ├── Applications.yaml      # 应用程序直连
-│   └── *.yaml                 # 品牌规则集（如 Netflix.yaml）
+├── ruleset/                   # 规则集（每个品牌独立子目录）
+│   ├── Direct/                # 基础规则集 (8个)
+│   ├── Netflix/               # 品牌规则集 (105个)
+│   └── .../
 ├── configs/                   # 平台配置文件
-│   ├── Nikki-mihomo.yml       # Nikki (OpenWrt / sing-box)
-│   └── Android-mihomo.yml     # Clash for Android
-├── providers/                 # 节点占位模板
-│   ├── airport1.yaml.example  # 机场订阅模板
-│   └── nodes.yaml.example     # 单节点协议模板
+│   ├── Nikki/config.yaml      # OpenWrt Nikki (mihomo 内核)
+│   └── Android/config.yaml    # Clash for Android
 ├── scripts/                   # 自动化脚本
-│   ├── sync-upstream.sh       # 上游同步（v2fly + Loyalsoldier）
-│   ├── generate-config.sh     # 配置生成
-│   ├── validate-ruleset.sh    # 格式校验 + 自动修复
-│   ├── import-openwrt.sh      # 从 OpenWrt-Domain-list 导入
-│   └── test_upstream.sh       # 上游存在性测试
+│   ├── sync-upstream.sh       # 上游同步（v2fly + Loyalsoldier + blackmatrix7）
+│   ├── generate-config.sh     # 配置生成（含 behavior 检测 + 图标注入）
+│   ├── validate-ruleset.sh    # 格式校验 + 自动修复 + README 同步
+│   └── sync-icons.sh          # Oasisic-Icons 图标同步
+├── plugins/                   # 平台适配插件
 ├── .github/workflows/
-│   └── daily-sync.yml         # 每日同步工作流
+│   └── daily-sync.yml         # 每日同步工作流 (06:00 BJT)
 ├── CHANGELOG.md               # 变更日志
-└── README.md                  # 项目文档
+└── README.md                  # 项目主页
 ```
 
 ## 核心规范
 
 ### 1. 命名规范
 
+- **目录结构**: `ruleset/<Brand>/<Brand>.yaml`（子目录 + 同名 yaml）
 - **文件名**: PascalCase（如 `Netflix.yaml`, `AIService.yaml`）
 - **去符号**: 去掉括号、`@`、`-`、`+` 等（`U-NEXT` → `UNext`, `Karaoke@DAM` → `KaraokeDam`）
 - **缩写保留**: `AI`, `TV`, `CDN`, `IP`, `ID` 等常见缩写保持大写
 - **Apple i-前缀**: `iCloud`, `iTunes` 等保持首字母小写
 - **裸文件**: 无后缀的文件自动加 `.yaml`（`bagumi` → `Bagumi.yaml`）
 
-### 2. Ruleset 文件格式
+### 2. 显示名映射
+
+品牌文件名 → Config 策略组显示名（`get_brand_display_name()`）：
+
+| 文件名 | 显示名 |
+|--------|--------|
+| `UNext` | `U-NEXT` |
+| `ZLibrary` | `Z-Library` |
+| `AppleIntelligence` | `Apple Intelligence` |
+| `AppleTV` | `Apple TV` |
+| `GoogleAI` | `Google AI` |
+| `GeneralAI` | `General AI` |
+| `YouTubeMusic` | `YouTube Music` |
+| `PrimeVideo` | `Prime Video` |
+
+### 3. Ruleset 文件格式
 
 ```yaml
 # ===========================================
 # Rule Name: Netflix
 # Author: Hawaiine
-# Updated: 2026-07-04 07:05:58
+# Updated: 2026-07-08 14:30:00
 # DOMAIN: 27
+# DOMAIN-KEYWORD: 0
 # DOMAIN-SUFFIX: 1
-# IP-CIDR: 0
+# IP-CIDR: 8
+# IP-CIDR6: 0
+# PROCESS-NAME: 0
 # ===========================================
 payload:
-  # --- DOMAIN 条目（按字母序） ---
+  # --- DOMAIN (27) ---
   - DOMAIN,netflix.com
-  # --- DOMAIN-SUFFIX 条目（按字母序） ---
+  # --- DOMAIN-SUFFIX (1) ---
   - DOMAIN-SUFFIX,nflxvideo.net
-  # --- IP-CIDR 条目（按字母序） ---
-  - IP-CIDR,10.0.0.0/8
+  # --- IP-CIDR (8) ---
+  - IP-CIDR,10.0.0.0/8,no-resolve
 ```
 
-**格式要求：**
-- Header 必须包含 `# Rule Name:`, `# Author:`, `# Updated:`, `# DOMAIN:`, `# DOMAIN-SUFFIX:`, `# IP-CIDR:`
-- 无 `# Source:` 行
-- 无 `@ads`、`@cn` 等标签
-- DOMAIN 在前，DOMAIN-SUFFIX 在后，IP-CIDR 最后，各自按字母序
-- 计数必须与实际条目数一致
+**要求：**
+- Header 必须包含全部 6 种计数：`DOMAIN`, `DOMAIN-KEYWORD`, `DOMAIN-SUFFIX`, `IP-CIDR`, `IP-CIDR6`, `PROCESS-NAME`
+- 无 `# Source:` 行，无 `@ads`、`@cn` 等标签
+- 计数器必须与实际条目数一致（validate 自动检查）
+- 更新时间：`Asia/Shanghai` 时区，格式 `YYYY-MM-DD HH:mm:ss`
+- IP-CIDR 保留 `,no-resolve` 后缀
 
-### 3. 路由架构
-
-项目采用 **RULE-SET 级分流**，每个品牌规则集即同名策略组：
+### 4. Behavior 检测
 
 ```
-RULE-SET,Netflix,Netflix      # Netflix 流量 → Netflix 策略组
-RULE-SET,Disney,Disney        # Disney 流量 → Disney 策略组
-RULE-SET,Direct,🎯 全球直连    # 国内流量 → 直连
+有 IP-CIDR / IP-CIDR6 / PROCESS-NAME / DOMAIN-KEYWORD → classical
+纯 DOMAIN / DOMAIN-SUFFIX                               → domain
 ```
 
-### 4. 规则集类别
+### 5. 规则匹配顺序（Config 中 rules: 段）
 
-- **基础规则集**: Direct, Proxy, Reject, Private, LanCIDR, CNCIDR, Telegram, Applications
-- **品牌规则集**: 流媒体、AI、社交、音乐、游戏、云服务等
+```
+1️⃣ 拦截    RULE-SET,Reject + GEOSITE 广告
+2️⃣ 品牌    Netflix/Bilibili 等（按需取消注释，放在国内前避免被GEOIP截胡）
+3️⃣ 局域网   LanCIDR + Private + Direct
+4️⃣ 国内IP  CNCIDR + GEOIP,CN
+5️⃣ 代理    RULE-SET,Proxy
+6️⃣ 兜底    MATCH
+```
+
+### 6. 规则集类别
+
+- **基础规则集** (8): Direct, Proxy, Reject, Private, LanCIDR, CNCIDR, Telegram, Applications
+- **品牌规则集** (105): 流媒体、AI、社交、音乐、游戏、云服务、电商等
 - **Porn/PornChina**: 特殊处理，不在 README 公开
+
+## 上游数据源
+
+| # | 上游 | 内容 | 拉取方式 |
+|---|------|------|---------|
+| ① | [v2fly/domain-list-community](https://github.com/v2fly/domain-list-community) | 仅域名 | `data/<brand>` 文件，递归解析 `include:` |
+| ② | [Loyalsoldier/clash-rules](https://github.com/Loyalsoldier/clash-rules) | 域名 + IP-CIDR | `parse-loyalsoldier.awk` 解析 YAML payload |
+| ③ | [blackmatrix7/ios_rule_script](https://github.com/blackmatrix7/ios_rule_script) | 域名 + IP-CIDR + PROC | `rule/Clash/<Brand>/` 的 `.yaml` 文件 |
+
+### 合并逻辑
+
+1. 基础数据（已有规则集内容）
+2. v2fly 补充域名
+3. Loyalsoldier 补充域名 + IP-CIDR
+4. blackmatrix7 补充：域名仅补漏，IP-CIDR/PROCESS-NAME 无条件全加
 
 ## 脚本操作
 
 ### sync-upstream.sh
 
-上游同步脚本，从 v2fly 和 Loyalsoldier 拉取数据。
+上游同步脚本，支持全量或单品牌同步。
 
-```
-# 同步所有品牌
+```bash
+# 全量同步（全部品牌 + 基础规则集）
 bash scripts/sync-upstream.sh
 
-# 同步单个品牌
+# 单品牌同步
 bash scripts/sync-upstream.sh Netflix
 
 # 同步基础规则集
-bash scripts/sync-upstream.sh  # 自动同步全部
+bash scripts/sync-upstream.sh Direct
 ```
 
 **关键特性：**
 - 递归解析 v2fly `include:` 指令（最多 5 层深度）
 - 品牌名映射：`Porn` → `category-porn`, `NHK` → `nhk`
 - 自动发现空 ruleset 文件并填充上游数据
-- 并行品牌同步（`sync_brand &` + `wait`）
-- Loyalsoldier 大文件用 awk 解析（11 万行 ~0.03 秒）
-- CI 超时控制：connect-timeout 20s, max-time 60s
-- 自动重命名不规范文件名（`tik-tok` → `TikTok`）
+- cross-type 去重：DOMAIN 被 DOMAIN-SUFFIX 覆盖时移除 DOMAIN
+- 空值过滤：跳过 `DOMAIN-SUFFIX,` 等无效行
+- Loyalsoldier 用 awk 解析（11 万行 ~0.03 秒）
 
 ### validate-ruleset.sh
 
-格式校验和自动修复脚本。
+格式校验 + 自动修复 + README 同步。
 
-```
+```bash
 # 校验所有 ruleset
 bash scripts/validate-ruleset.sh
 
-# 校验指定文件
-bash scripts/validate-ruleset.sh ruleset/Netflix.yaml
+# 校验单个
+bash scripts/validate-ruleset.sh ruleset/Netflix/Netflix.yaml
 ```
 
 **自动修复能力：**
-- 裸域名 → `DOMAIN,xxx`（`example.com` → `DOMAIN,example.com`）
+- 裸域名 → `DOMAIN,` 格式
 - `+.xxx` / `.xxx` → `DOMAIN-SUFFIX,xxx`
-- `full:xxx` → `DOMAIN-SUFFIX,xxx`
-- 小写 `domain,` → `DOMAIN,`
-- 去掉 `@ads` 标签
-- 裸文件自动加 `.yaml` 后缀
-- 小写文件名自动转 PascalCase（`bagumi` → `Bagumi`）
-- 更新 header 计数
-- 排序（DOMAIN → SUFFIX → IP-CIDR，各自按字母序）
+- 去掉 `@ads` `@cn` 标签
+- 小写文件名 → PascalCase
+- Header 计数与实际条目同步
+- 自动生成/更新品牌 README.md
+- 幂等：无变化不覆写
 
 ### generate-config.sh
 
-生成平台配置文件。
+生成 Nikki + Android 双平台配置文件。
 
-```
+```bash
 bash scripts/generate-config.sh
 ```
 
-自动扫描 `ruleset/` 下的 `.yaml` 文件，生成：
-- `rule-providers` 块（含 URL 和路径）
-- `rules` 块（RULE-SET 引用）
-- 同名策略组映射
-
-### import-openwrt.sh
-
-从 OpenWrt-Domain-list 仓库批量导入品牌规则集。
+自动输出的 config 结构（按官方 mihomo 文档顺序排列）：
 
 ```
-bash scripts/import-openwrt.sh
+mixed-port → allow-lan → find-process-mode → mode → geox-url → log-level →
+ipv6 → external-controller → profile → tun → dns → proxy-providers →
+proxy-groups → rule-providers → rules
 ```
 
-处理文件名特殊字符：`GameJP(GAME JAPAN)` → `GameJapan.yaml`
+**功能：**
+- 自动检测 behavior（classical / domain）
+- 品牌显示名映射（AppleIntelligence → Apple Intelligence）
+- 图标注入（Oasisic-Icons CDN URL）
+- DNS 三段式分流（nameserver + nameserver-policy + fallback）
+- 策略组名和引用统一加引号，组间空行分隔
 
-## 上游数据源
+### sync-icons.sh
 
-| 源 | 用途 | URL |
-|----|------|-----|
-| v2fly/domain-list-community | 品牌域名数据 | `raw.githubusercontent.com/v2fly/domain-list-community/master/data/` |
-| Loyalsoldier/clash-rules | 基础规则集 | `raw.githubusercontent.com/Loyalsoldier/clash-rules/release/` |
-| MetaCubeX/meta-rules-dat | geox 数据 | `fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/` |
+从 Oasisic-Icons 仓库扫描品牌图标，生成映射表。
+
+```bash
+bash scripts/sync-icons.sh
+```
+
+## DNS 配置规范（Nikki）
+
+```
+default-nameserver: 223.5.5.5, 119.29.29.29     ← 仅解析 nameserver 域名 IP
+nameserver:         阿里 DoH, DNSPod DoH         ← 国内 DoH 主力
+proxy-server-ns:    Cloudflare DoH               ← 代理服务器专用（防死循环）
+nameserver-policy:
+  geosite:cn              → 国内 DNS             ← 按 geosite 分流
+  geosite:geolocation-!cn → 国际 DNS
+fallback:                 Cloudflare/Google DoH  ← 兜底
+fallback-filter:          geoip:cn + geosite:cn  ← CN 域名不经过 fallback
+fake-ip-filter:           +.lan, +.local, +.corp ← 不使用 fake-ip
+```
+
+端口：
+- **Android**: `dns.listen: 0.0.0.0:53`
+- **Nikki**: `dns.listen: 0.0.0.0:1053`（nftables 劫持 53→1053）
 
 ## CI/CD 工作流
 
@@ -201,96 +251,71 @@ bash scripts/import-openwrt.sh
 
 | 步骤 | 描述 |
 |------|------|
-| checkout | actions/checkout@v7 |
-| sync-upstream.sh | 上游同步（20min 超时） |
-| validate-ruleset.sh | 格式校验（5min 超时） |
-| generate-config.sh | 配置生成（10min 超时） |
+| checkout | actions/checkout@v3 |
+| sync-upstream.sh | 全量同步（60min 超时） |
+| sync-icons.sh | 图标映射更新 |
+| validate-ruleset.sh | 格式校验 + README 同步 |
+| generate-config.sh | 双平台配置生成 |
 | git commit + push | 中文 emoji 提交，北京时间 |
-| Discord webhook | 成功通知（提交者+分支+时间） |
-
-**环境变量：**
-- `TZ: Asia/Shanghai` — 北京时间
-- `DISCORD_WEBHOOK` — 通过 GitHub Secrets 传入
-
-## 常见工作流
-
-### 添加新品牌
-
-1. 创建 bare 文件或 `.yaml` 文件
-2. 写入不规范域名（支持裸域名、`+.` 前缀等）
-3. 运行 `bash scripts/validate-ruleset.sh` 自动修复
-4. 运行 `bash scripts/sync-upstream.sh <Brand>` 补充上游数据
-5. `git add` + `git commit`（pre-commit 钩子自动校验）
-
-### 手动补充域名
-
-1. 编辑 `ruleset/<Brand>.yaml`
-2. 添加裸域名（如 `example.com`）
-3. 运行 `bash scripts/validate-ruleset.sh` 自动修正格式
-4. 更新 `# Updated:` 时间
-
-### 排查 CI 失败
-
-1. `gh run view <run-id> --log` 查看日志
-2. 常见问题：
-   - 上游超时 → 检查 curl 超时设置
-   - 数据量过大 → 检查 awk 解析
-   - include 递归未生效 → 检查 `v2fly_all.txt` 是否保留了原始内容
-   - 403 推送失败 → 检查 `permissions: contents: write`
+| cleanup | 清理失败 Actions |
+| Discord webhook | embed 卡片通知 |
 
 ## 关键配置参考
 
 ### v2fly 品牌名映射
 
-当品牌名 ≠ v2fly 数据文件名时，需在 `sync-upstream.sh` 中添加映射：
-
 ```bash
 case "$brand" in
   Porn) v2fly_lower="category-porn" ;;
-  NHK) v2fly_lower="nhk" ;;
+  NHK)  v2fly_lower="nhk" ;;
 esac
 ```
 
-### Discord Webhook Payload
+### Discord Webhook Embed
 
 ```json
 {
-  "username": "mihomo-rules",
   "embeds": [{
-    "title": "🔄 mihomo-rules 同步完成",
-    "url": "${COMMIT_URL}",
-    "description": "`${COMMIT_MSG}`",
-    "color": 3447003,
-    "fields": [
-      {"name": "提交者", "value": "${COMMIT_AUTHOR}", "inline": true},
-      {"name": "分支", "value": "main", "inline": true}
-    ]
+    "title": "🔄 规则集已更新",
+    "description": "| 规则集 | 变更 |\n|--------|------|\n| Netflix | +8 条 |\n| Disney | +3 条 |",
+    "color": 5814783,
+    "footer": { "text": "mihomo-rules · 自动同步", "icon_url": "..." },
+    "timestamp": "2026-07-07 14:30:00"
   }]
 }
 ```
 
-注意：commit message 必须用 `git log --format='%s'` 单行格式，多行会破坏 JSON。
+### Config Key 顺序（官方规范）
+
+```
+mixed-port → allow-lan → bind-address → find-process-mode → mode →
+geox-url → log-level → ipv6 → external-controller → profile →
+tun → dns → proxy-providers → proxy-groups → rule-providers → rules
+```
 
 ## 常见陷阱
 
-1. **include 递归丢失原始内容**：`cat >> v2fly_all.txt` 前必须 `cp v2fly.txt v2fly_all.txt`，否则原始内容被覆盖
-2. **文件名规范化破坏已有品牌名**：只应在首字母小写时重命名，且排除 `iCloud` 等 i-前缀
-3. **Commit message 破坏 JSON**：必须用 `git log --format='%s'`（单行），不能用 `--pretty=%B`
-4. **CI 超时**：Loyalsoldier 大文件 11 万行，bash 逐行解析 5.4 秒，aww 只需 0.03 秒
-5. **Discord 通知静默失败**：删除 `|| echo` 让失败可见，不要 mask 错误
-6. **Porn/PornChina 不应在 README 公开**
+1. **include 递归丢失原始内容**：`cat >> v2fly_all.txt` 前必须 `cp v2fly.txt v2fly_all.txt`
+2. **DOMAIN-KEYWORD 含有完整域名**：需转为 DOMAIN 条目（`DOMAIN-KEYWORD,example.com` → `DOMAIN,example.com`）
+3. **stats 行污染 payload**：awk END 块必须单行输出 `STATS`，不能多行 `printf`
+4. **YAML 解析 FE0F 字符**：`♻️` 后的变体选择符 `U+FE0F` 使 YAML 解析器报 `?`，必须移除
+5. **brand 组 YAML 格式**：必须用 `- name: "Brand"` 格式，不能用 `Brand:`（非序列项）
+6. **图标错配**：`X` 前缀匹配 `Xbox`，需硬编码修正或精确正则
+7. **Commit message 破坏 JSON**：必须用 `git log --format='%s'`（单行）
+8. **Porn/PornChina 不应在 README 公开**
 
 ## 验证检查清单
 
-- [ ] 新 ruleset 文件命名 PascalCase
-- [ ] Header 格式正确（Rule Name, Author, Updated, 计数）
+- [ ] 新 ruleset 使用子目录 + PascalCase
+- [ ] Header 6 种计数与实际一致
 - [ ] 无 `@ads`、`@cn` 等标签
 - [ ] 无 `# Source:` 行
-- [ ] DOMAIN/SUFFIX/IP-CIDR 按字母序排列
-- [ ] Header 计数与实际条目一致
-- [ ] 裸文件已加 `.yaml` 后缀
-- [ ] 上游 include 递归解析正确（多品牌时检查 `v2fly_all.txt`）
+- [ ] 条目按类型分组，组内字母序
+- [ ] behavior 检测正确（classical / domain）
+- [ ] config 按官方 key 顺序排列
+- [ ] 品牌显示名映射正确
+- [ ] DNS 端口平台独立（Android 53 / Nikki 1053）
+- [ ] 图标同步无误（无 404）
 - [ ] CI 工作流语法正确 (`bash -n`)
-- [ ] 敏感信息（token, webhook URL）未提交到仓库
-- [ ] README 已更新（如新增品牌）
-- [ ] CHANGELOG 已更新（中文 + emoji）
+- [ ] 敏感信息未提交
+- [ ] README + CHANGELOG 已更新
