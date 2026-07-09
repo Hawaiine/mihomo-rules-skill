@@ -48,7 +48,8 @@ mihomo-rules/
 │   ├── generate-config.sh     # 配置生成（含 behavior 检测 + 图标注入）
 │   ├── validate-ruleset.sh    # 格式校验 + 自动修复 + README 同步
 │   └── sync-icons.sh          # Oasisic-Icons 图标同步
-├── plugins/                   # 平台适配插件
+│   ├── parse-loyalsoldier.awk    # Loyalsoldier 解析器
+│   └── parse-v2fly.awk           # v2fly 解析器
 ├── .github/workflows/
 │   └── daily-sync.yml         # 每日同步工作流 (06:00 BJT)
 ├── CHANGELOG.md               # 变更日志
