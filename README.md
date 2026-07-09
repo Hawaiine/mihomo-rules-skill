@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"/>
-  <img alt="Hermes Skill" src="https://img.shields.io/badge/Hermes-Skill-v2.0-blueviolet?style=flat-square"/>
-  <img alt="Project" src="https://img.shields.io/badge/ref-Hawaiine/mihomo--rules-blue?style=flat-square"/>
+  <img alt="License" src="https://img.shields.io/static/v1?label=license&message=MIT&color=blue&style=flat-square"/>
+  <img alt="Hermes Skill" src="https://img.shields.io/static/v1?label=Hermes&message=Skill+v2.0&color=blueviolet&style=flat-square"/>
+  <img alt="Project" src="https://img.shields.io/static/v1?label=ref&message=Hawaiine/mihomo-rules&color=blue&style=flat-square"/>
 </p>
 
 ---
