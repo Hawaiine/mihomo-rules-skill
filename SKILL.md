@@ -7,7 +7,7 @@ description: >-
   configs (Nikki/Clash for Android), syncing icons from Oasisic-Icons, and
   operating the associated GitHub Actions CI/CD pipeline. Covers the
   Hawaiine/mihomo-rules project conventions.
-version: 2.0.0
+version: 2.1.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -123,7 +123,8 @@ payload:
 
 ```
 1️⃣ 拦截    RULE-SET,Reject + GEOSITE 广告
-2️⃣ 品牌    Netflix/Bilibili 等（按需取消注释，放在国内前避免被GEOIP截胡）
+2️⃣ 品牌    Netflix/Bilibili 等（子品牌优先于父品牌，避免被宽泛规则截胡）
+           例: YouTube 在 Google 前, AppleTV 在 Apple 前, OneDrive 在 Microsoft 前
 3️⃣ 局域网   LanCIDR + Private + Direct
 4️⃣ 国内IP  CNCIDR + GEOIP,CN
 5️⃣ 代理    RULE-SET,Proxy
@@ -231,20 +232,32 @@ bash scripts/sync-icons.sh
 ## DNS 配置规范（Nikki）
 
 ```
-default-nameserver: 223.5.5.5, 119.29.29.29     ← 仅解析 nameserver 域名 IP
-nameserver:         阿里 DoH, DNSPod DoH         ← 国内 DoH 主力
-proxy-server-ns:    Cloudflare DoH               ← 代理服务器专用（防死循环）
+default-nameserver: 223.5.5.5, 119.29.29.29        ← 仅解析 nameserver 域名 IP
+nameserver:         doh.pub, dns.alidns.com DoH     ← 国内 DoH 主力（带 UDP 兜底）
+proxy-server-ns:    doh.pub, dns.alidns.com DoH     ← 全国内！代理服务器专用（防死循环）
 nameserver-policy:
-  geosite:cn              → 国内 DNS             ← 按 geosite 分流
-  geosite:geolocation-!cn → 国际 DNS
-fallback:                 Cloudflare/Google DoH  ← 兜底
-fallback-filter:          geoip:cn + geosite:cn  ← CN 域名不经过 fallback
-fake-ip-filter:           +.lan, +.local, +.corp ← 不使用 fake-ip
+  geosite:private,cn        → 国内 DNS             ← 按 geosite 分流
+  geosite:geolocation-!cn   → 1.1.1.1, dns.google   ← 国际 DNS（8.8.8.8→dns.google）
+fallback:                   1.1.1.1, dns.google DoH ← 兜底（并发查询，取最快）
+fallback-filter:            geoip:cn + ipcidr       ← CN 域名不经过 fallback (geosite 已废弃移除)
+fake-ip-filter:             +.lan, +.local, +.corp,
+                            +.pool.ntp.org, +.time.apple.com,
+                            +.time.google.com       ← NTP 域名走真实 IP
+skip-domain (sniffer):      +.apple.com             ← Apple CDN 保留 DNS mapping
 ```
 
 端口：
 - **Android**: `dns.listen: 0.0.0.0:53`
 - **Nikki**: `dns.listen: 0.0.0.0:1053`（nftables 劫持 53→1053）
+
+## geox-url 配置（Wiki 推荐）
+
+```
+geoip:   https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat
+geosite: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat
+mmdb:    https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb
+asn:     https://github.com/xishang0128/geoip/releases/download/latest/GeoLite2-ASN.mmdb
+```
 
 ## CI/CD 工作流
 
@@ -304,6 +317,10 @@ tun → dns → proxy-providers → proxy-groups → rule-providers → rules
 6. **图标错配**：`X` 前缀匹配 `Xbox`，需硬编码修正或精确正则
 7. **Commit message 破坏 JSON**：必须用 `git log --format='%s'`（单行）
 8. **Porn/PornChina 不应在 README 公开**
+9. **阿里 DoH IP 直连不工作**：`https://223.5.5.5/dns-query` 不支持，必须用 `dns.alidns.com` 域名
+10. **fallback-filter.geosite 已废弃**：用 `nameserver-policy` 替代，`geosite:gfw` 被子集 `geolocation-!cn` 覆盖
+11. **自动选择/故障转移不要放 DIRECT**：直交由规则层处理，代理组只留真实节点
+12. **geox-url 用 Wiki 推荐**：`testingcf.jsdelivr.net`（国内加速）+ 完整版文件 + `xishang0128` ASN
 
 ## 验证检查清单
 

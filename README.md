@@ -24,9 +24,10 @@
 - ✅ 完整的项目结构、命名规范、文件格式
 - ✅ 三大上游（v2fly / Loyalsoldier / blackmatrix7）的同步逻辑与合并策略
 - ✅ 4 个核心脚本的完整工作流
-- ✅ DNS 三段式分流配置规范（Nikki / Android）
+- ✅ DNS 三段式分流配置规范 + geox-url Wiki 推荐 + NTP/skip-domain 调优
+- ✅ 策略组最佳实践（自动选择/故障转移不含 DIRECT）
 - ✅ GitHub Actions CI/CD 工作流
-- ✅ 10+ 个已踩过的坑（include 递归丢失、YAML FE0F 字符、stats 行污染等）
+- ✅ 14 个已踩过的坑（include 递归丢失、YAML FE0F 字符、stats 行污染、阿里 DoH IP 直连不工作等）
 - ✅ 16 项提交前验证清单
 
 **省去每次重复说明规范的麻烦，直接让 Agent 干活。**
@@ -91,9 +92,10 @@ cp mihomo-rules-skill/SKILL.md ~/.hermes/skills/mihomo-rules-management/
 | 🛠️ **脚本工作流** | sync-upstream / validate / generate-config / sync-icons | ✅ |
 | 🌐 **上游同步** | 3 源合并逻辑、v2fly include 递归、cross-type 去重 | ✅ |
 | ⚙️ **配置生成** | 双平台、官方 key 顺序、DNS 三段分流、图标注入 | ✅ |
-| 📡 **DNS 规范** | nameserver / proxy-server-ns / nameserver-policy / fallback | ✅ |
+| 📡 **DNS 规范** | nameserver / proxy-server-ns / nameserver-policy / fallback + geox-url Wiki 推荐 | ✅ |
+| 🎯 **策略组最佳实践** | 自动选择/故障转移不含 DIRECT，直交由规则层处理 | ✅ |
 | 🤖 **CI/CD** | daily-sync.yml 工作流、Discord embed 通知 | ✅ |
-| ⚠️ **常见陷阱** | include 递归、FE0F YAML、stats 污染、图标错配等 10+ 个 | ✅ |
+| ⚠️ **常见陷阱** | include 递归、FE0F YAML、stats 污染、图标错配、阿里 DoH IP 直连不工作等 14 个 | ✅ |
 | ✅ **检查清单** | 16 项提交前验证标准 | ✅ |
 
 ---
