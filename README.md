@@ -90,12 +90,12 @@ cp mihomo-rules-skill/SKILL.md ~/.hermes/skills/mihomo-rules-management/
 | 🧠 **Behavior 检测** | 有 IP-CIDR/PROCESS/KEYWORD → classical，纯域名 → domain | ✅ |
 | 🗺️ **规则顺序** | 6 段：拦截→品牌→局域网→国内IP→代理→兜底 | ✅ |
 | 🛠️ **脚本工作流** | sync-upstream / validate / generate-config / sync-icons | ✅ |
-| 🌐 **上游同步** | 3 源合并逻辑、v2fly include 递归、cross-type 去重 | ✅ |
+|| 🌐 **上游同步** | 3 源合并逻辑、v2fly include 递归、cross-type 去重、xargs -P 6 并发、awk 清洗、增量 sanitize、域名/CIDR 校验、异常量级检测 | ✅ |
 | ⚙️ **配置生成** | 双平台、官方 key 顺序、DNS 三段分流、图标注入 | ✅ |
 | 📡 **DNS 规范** | nameserver / proxy-server-ns / nameserver-policy / fallback 全段 UDP 兜底 + geox-url Wiki 推荐 | ✅ |
 | 🎯 **策略组最佳实践** | 自动选择/故障转移/品牌组不含 🎯 全球直连，DIRECT 替代全部 | ✅ |
 | 🤖 **CI/CD** | daily-sync.yml 工作流、Discord embed 通知（修复换行乱码） | ✅ |
-| ⚠️ **常见陷阱** | include 递归、FE0F YAML、stats 污染、图标错配、阿里 DoH IP 直连不工作、DNS UDP 兜底等 17 个 | ✅ |
+| ⚠️ **常见陷阱** | include 递归、FE0F YAML、stats 污染、sanitize 去重翻倍、图标错配、阿里 DoH IP 直连不工作、DNS UDP 兜底等 25 个 | ✅ |
 | ✅ **检查清单** | 16 项提交前验证标准 | ✅ |
 
 ---

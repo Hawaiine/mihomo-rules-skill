@@ -50,6 +50,7 @@ mihomo-rules/
 │   ├── generate-config.sh     # 配置生成（含 behavior 检测 + min 自动生成）
 │   ├── validate-ruleset.sh    # 格式校验 + 自动修复 + README 同步
 │   ├── sync-icons.sh          # Oasisic-Icons 图标同步（含 token 支持）
+│   ├── header-order.sh        # 共享 HEADER_ORDER 定义（被 sync / validate source）
 │   ├── parse-loyalsoldier.awk # Loyalsoldier 解析器
 │   ├── parse-v2fly.awk        # v2fly 解析器
 │   └── icon-map.sh            # 图标映射表（自动生成，不手动维护）
@@ -222,13 +223,19 @@ bash scripts/sync-upstream.sh Direct
 **关键特性：**
 - 递归解析 v2fly `include:` 指令（最多 5 层深度）
 - 品牌名映射：`Porn` → `category-porn`, `X` → `twitter`
-- 统一清洗函数 `clean_file()`：去重 + 去 @tag + 去空白 + 过滤无效类型
+- 统一清洗函数 `clean_file()`：去重 + 去 @tag + 去空白 + 过滤无效类型（awk 单遍，大文件 ~2s）
 - Include 路由：跨品牌域名自动路由到对应规则集（Microsoft→GitHub, Google→YouTube）
 - 品牌过滤兜底：路由未能覆盖的用 `GITHUB_PATTERN`/`YOUTUBE_PATTERN` 变量拦截
 - `normalize_cidr()` 共用函数：IP-CIDR 和 IP-CIDR6 统一去重 no-resolve 变体
 - 幂等：payload diff 比较，无变化不覆盖
 - bm7 仅提取 IP-CIDR/IP-CIDR6/PROCESS-NAME/DOMAIN-REGEX，不做域名同步
 - `DOMAIN,regexp:` → `DOMAIN-REGEX` 自动转换
+- **并发拉取**：`xargs -P 6` 品牌级并发（无 xargs 自动降级）
+- **增量 sanitize**：只处理 `.synced_` 标记的品牌，节省 30-60s CI 时间
+- **域名格式校验**：DOMAIN/DOMAIN-SUFFIX 正则校验（报警不丢弃）
+- **IP-CIDR 格式校验**：IPv4/IPv6 掩码范围校验（报警不丢弃）
+- **异常量级检测**：`merge_write()` 中 cp 覆盖前比较新旧总量，>5 倍触发 CI 日志 + Discord 双通道报警
+- **HEADER_ORDER 共享**：`scripts/header-order.sh` 被 sync 和 validate 共同 source
 
 ### validate-ruleset.sh
 
@@ -304,7 +311,7 @@ skip-domain (sniffer):      +.apple.com, +.digicert.com, +.microsoft.com
 ```
 
 端口：
-- **Android**: `dns.listen: 0.0.0.0:53`
+- **Android**: `dns.listen: 127.0.0.1:53`（VPN 本地，避免端口冲突）
 - **Nikki**: `dns.listen: 0.0.0.0:1053`（nftables 劫持 53→1053）
 
 ## geox-url 配置（Wiki 推荐）
@@ -411,38 +418,47 @@ tun → dns → sniffer → proxy-providers → proxy-groups → rule-providers 
 20. **category-ads-all 已移除**：Reject 规则集（164k+ 条）已覆盖，`GEOSITE,category-ads-all` 从 config 中删除
 21. **sync-icons.sh 本地限流**：API 模式无 token 会被 GitHub 限流，设 `GITHUB_TOKEN` 或 `GH_TOKEN` 解决
 22. **min config 自动生成**：`config.min.yaml` 由 `generate-config.sh` 后处理自动生成，勿手动编辑
+23. **sanitize 去重 bug**：`sanitize_all_rulesets()` 的 awk 去重逻辑 `p==1{print; next}` 会误复制所有 payload 再 append sort -u 导致翻倍。必须用 `/^  - /{next} 1` 跳过 payload
+24. **异常量级检测位置**：必须放在 `merge_write()` 的 `cp` 覆盖前，不能放 `sanitize_all_rulesets()`（那里比较的是清洗前后，不会暴增）
+25. **`.synced_` 标记来源**：只在 `sync_single_brand`/路由缓存合并时创建，全量并发模式由 xargs 调用的子进程创建。sanitize 增量模式依赖此标记
 
 ## 验证检查清单
 
 - [ ] 新 ruleset 使用子目录 + PascalCase
 - [ ] Header 7 种计数与实际一致（含 DOMAIN-REGEX）
-- [ ] 无 `@ads`、`@cn` 等标签
+- [ ] Header 顺序: REGEX < SUFFIX（DOMAIN < DOMAIN-KEYWORD < DOMAIN-REGEX < DOMAIN-SUFFIX < IP-CIDR < IP-CIDR6 < PROCESS-NAME）
+- [ ] 无分组注释（`# --- TYPE (N) ---`），无 `@ads`、`@cn` 等标签
 - [ ] 无 `# Source:` 行
 - [ ] 条目按类型分组，组内字母序
 - [ ] behavior 检测正确（71 domain / 34 classical）
 - [ ] config 按官方 key 顺序排列
 - [ ] config.min.yaml 自动生成与 config.yaml 同步
 - [ ] 品牌显示名映射正确
-- [ ] DNS 端口平台独立（Android 53 / Nikki 1053）
+- [ ] DNS 端口平台独立（Android 127.0.0.1:53 / Nikki 0.0.0.0:1053）
 - [ ] 图标同步无误（无 404）
 - [ ] `bash -n scripts/*.sh` 全部通过
 - [ ] `validate-ruleset.sh` 全部文件通过
+- [ ] 全品牌去重检查（`grep '^  - ' | sort -u | wc -l` == `grep -c '^  - '`）
+- [ ] 域名/CIDR 格式无异常（sync 日志中的 ⚠ 警告需人工核查）
 - [ ] `python3 -c "import yaml; yaml.safe_load(open(...))"` YAML 有效
 - [ ] 敏感信息未提交
 - [ ] README + CHANGELOG 已更新
 - [ ] 新 ruleset 使用子目录 + PascalCase
 - [ ] Header 7 种计数与实际一致（含 DOMAIN-REGEX）
-- [ ] 无 `@ads`、`@cn` 等标签
+- [ ] Header 顺序: REGEX < SUFFIX（DOMAIN < DOMAIN-KEYWORD < DOMAIN-REGEX < DOMAIN-SUFFIX < IP-CIDR < IP-CIDR6 < PROCESS-NAME）
+- [ ] 无分组注释（`# --- TYPE (N) ---`），无 `@ads`、`@cn` 等标签
 - [ ] 无 `# Source:` 行
 - [ ] 条目按类型分组，组内字母序
 - [ ] behavior 检测正确（71 domain / 34 classical）
 - [ ] config 按官方 key 顺序排列
 - [ ] config.min.yaml 自动生成与 config.yaml 同步
 - [ ] 品牌显示名映射正确
-- [ ] DNS 端口平台独立（Android 53 / Nikki 1053）
+- [ ] DNS 端口平台独立（Android 127.0.0.1:53 / Nikki 0.0.0.0:1053）
 - [ ] 图标同步无误（无 404）
 - [ ] `bash -n scripts/*.sh` 全部通过
 - [ ] `validate-ruleset.sh` 全部文件通过
+- [ ] 全品牌去重检查（`grep '^  - ' | sort -u | wc -l` == `grep -c '^  - '`）
+- [ ] 域名/CIDR 格式无异常（sync 日志中的 ⚠ 警告需人工核查）
 - [ ] `python3 -c "import yaml; yaml.safe_load(open(...))"` YAML 有效
 - [ ] 敏感信息未提交
 - [ ] README + CHANGELOG 已更新
